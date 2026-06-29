@@ -17,13 +17,14 @@ OUTDIR = os.path.dirname(os.path.abspath(__file__))
 def proxy_urls(t):
     e = urllib.parse.quote(t, safe="")
     return [
-        "https://cors.eu.org/" + t,
         "https://api.allorigins.win/raw?url=" + e,
+        "https://cors.eu.org/" + t,
         "https://api.codetabs.com/v1/proxy/?quest=" + e,
+        "https://corsproxy.io/?url=" + e,
     ]
 
 
-def proxy_get(t, timeout=50, want_image=False, retries=3):
+def proxy_get(t, timeout=20, want_image=False, retries=2):
     for _ in range(retries):
         for pu in proxy_urls(t):
             try:
@@ -36,12 +37,16 @@ def proxy_get(t, timeout=50, want_image=False, retries=3):
                         return r
             except Exception:
                 pass
-        time.sleep(1.2)
+        time.sleep(1.0)
     return None
 
 
 def get_feed():
-    r = proxy_get(TAG_RSS, want_image=False)
+    try:
+        r = proxy_get(TAG_RSS, want_image=False)
+    except Exception as e:
+        print("get_feed error:", e)
+        return []
     if not r:
         return []
     items = []
@@ -125,8 +130,18 @@ def pg(title, css, body):
 
 
 def main():
-    items = get_feed()
+    # RSS 多轮重试, 失败则不覆盖现有页面(避免清空)
+    items = []
+    for attempt in range(3):
+        items = get_feed()
+        if items:
+            break
+        print(f"feed empty, retry {attempt+1}/3 ...")
+        time.sleep(2)
     print("feed items:", len(items))
+    if not items:
+        print("ABORT: RSS unreachable, keep existing pages unchanged.")
+        return
     data = []
     for i, it in enumerate(items):
         page = proxy_get(it["link"], want_image=False)
@@ -144,6 +159,10 @@ def main():
         cov = f'<img class="cover" loading="lazy" src="{it["cover"]}" alt="">' if it["cover"] else ""
         n = 1 + len(it["images"])
         cards.append(f'<a class="card" href="post-{i}.html">{cov}<div class="meta"><span class="cat">{html.escape(it["cat"])}</span><div class="title">{html.escape(it["title"])}</div><div class="row"><span class="date">{it["date"]}</span><span class="enter">看图文详情 &rarr;</span></div><div class="cnt">{n} 张图</div></div></a>')
+    covers_ok = sum(1 for it in data if it["cover"])
+    if not cards or covers_ok == 0:
+        print(f"ABORT: no usable cards (cards={len(cards)}, covers_ok={covers_ok}); keep existing pages.")
+        return
     listbody = f'<div class="bar"><div class="inner"><div><h1>Magnum · 街拍</h1><p>Street Photography · 更新于 {upd}</p></div></div></div><div class="wrap">{"".join(cards)}</div><div class="foot">每日自动更新 · 数据来自 magnumphotos.com · 仅供个人浏览<br>更新于 {upd}</div>'
     open(os.path.join(OUTDIR, "index.html"), "w", encoding="utf-8").write(pg("Magnum 街拍", LIST_CSS, listbody))
     # posts
