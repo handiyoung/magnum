@@ -13,6 +13,14 @@ COVER_W = 760
 BODY_W = 760
 OUTDIR = os.path.dirname(os.path.abspath(__file__))
 
+GLOBAL_DEADLINE = time.time() + 300   # 全脚本最多跑 5 分钟, 到点立即收尾, 绝不卡死
+CONN_TIMEOUT = 8                      # 连接超时
+READ_TIMEOUT = 15                     # 读取超时(防慢速服务器拖死)
+
+
+def time_left():
+    return GLOBAL_DEADLINE - time.time()
+
 
 def proxy_urls(t):
     e = urllib.parse.quote(t, safe="")
@@ -24,11 +32,13 @@ def proxy_urls(t):
     ]
 
 
-def proxy_get(t, timeout=20, want_image=False, retries=2):
+def proxy_get(t, want_image=False, retries=2):
     for _ in range(retries):
         for pu in proxy_urls(t):
+            if time_left() < 10:           # 接近总超时, 放弃, 让脚本尽快收尾
+                return None
             try:
-                r = requests.get(pu, timeout=timeout)
+                r = requests.get(pu, timeout=(CONN_TIMEOUT, READ_TIMEOUT))
                 ct = r.headers.get("content-type", "")
                 if r.status_code == 200:
                     if want_image and "image" in ct and len(r.content) > 3000:
@@ -37,7 +47,7 @@ def proxy_get(t, timeout=20, want_image=False, retries=2):
                         return r
             except Exception:
                 pass
-        time.sleep(1.0)
+        time.sleep(0.8)
     return None
 
 
