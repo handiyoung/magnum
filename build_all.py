@@ -135,13 +135,32 @@ LIST_CSS = BASE_CSS + ".card{background:#151515;border:1px solid #1f1f1f;border-
 POST_CSS = BASE_CSS + ".hero{width:100%;display:block;background:#1a1a1a}.head2{padding:18px 18px 6px}.cat{display:inline-block;font-size:11px;color:#e36aa0;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px}.ttl{font-size:22px;font-weight:600;line-height:1.35;margin-bottom:8px}.date{font-size:12px;color:#777}.body{padding:6px 18px 10px}.body p{font-size:15px;color:#cfcfcf;line-height:1.75;margin-bottom:14px}.shots img{width:100%;display:block;margin:0 0 6px;background:#1a1a1a;border-radius:10px}.foot{text-align:center;color:#555;font-size:11px;padding:20px 16px calc(30px + env(safe-area-inset-bottom))}.src{display:block;text-align:center;font-size:12px;color:#6cb6ff;padding:8px}"
 
 
+AUTO_REFRESH_JS = """
+(function(){
+  function stamp(t){var m=t.match(/更新于\\s*([0-9: -]+)/);return m?m[1].trim():''}
+  var cur=stamp(document.body.innerText||'');
+  function check(){
+    fetch(location.pathname+'?_ts='+Date.now(),{cache:'no-store'})
+      .then(function(r){return r.text()})
+      .then(function(t){var s=stamp(t); if(s&&cur&&s!==cur){location.reload(true)} })
+      .catch(function(){});
+  }
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)check()});
+  setInterval(check, 180000);
+})();
+"""
+
+
 def pg(title, css, body):
     return (f'<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            f'<meta name="apple-mobile-web-app-capable" content="yes">'
+            f'<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
+            f'<meta http-equiv="Pragma" content="no-cache">'
+            f'<meta http-equiv="Expires" content="0">'
             f'<meta name="apple-mobile-web-app-title" content="Magnum 街拍">'
             f'<meta name="theme-color" content="#0c0c0c">'
-            f'<title>{html.escape(title)}</title><style>{css}</style></head><body>{body}</body></html>')
+            f'<title>{html.escape(title)}</title><style>{css}</style></head><body>{body}'
+            f'<script>{AUTO_REFRESH_JS}</script></body></html>')
 
 
 def main():
