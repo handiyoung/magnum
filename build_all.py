@@ -22,9 +22,13 @@ def time_left():
     return GLOBAL_DEADLINE - time.time()
 
 
+UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+
+
 def proxy_urls(t):
     e = urllib.parse.quote(t, safe="")
     return [
+        t,                                              # 直连优先(GitHub服务器IP干净, 多半能直接访问 Magnum)
         "https://api.allorigins.win/raw?url=" + e,
         "https://cors.eu.org/" + t,
         "https://api.codetabs.com/v1/proxy/?quest=" + e,
@@ -38,7 +42,8 @@ def proxy_get(t, want_image=False, retries=2):
             if time_left() < 10:           # 接近总超时, 放弃, 让脚本尽快收尾
                 return None
             try:
-                r = requests.get(pu, timeout=(CONN_TIMEOUT, READ_TIMEOUT))
+                r = requests.get(pu, timeout=(CONN_TIMEOUT, READ_TIMEOUT),
+                                  headers={"User-Agent": UA})
                 ct = r.headers.get("content-type", "")
                 if r.status_code == 200:
                     if want_image and "image" in ct and len(r.content) > 3000:
@@ -170,8 +175,9 @@ def main():
         n = 1 + len(it["images"])
         cards.append(f'<a class="card" href="post-{i}.html">{cov}<div class="meta"><span class="cat">{html.escape(it["cat"])}</span><div class="title">{html.escape(it["title"])}</div><div class="row"><span class="date">{it["date"]}</span><span class="enter">看图文详情 &rarr;</span></div><div class="cnt">{n} 张图</div></div></a>')
     covers_ok = sum(1 for it in data if it["cover"])
-    if not cards or covers_ok == 0:
-        print(f"ABORT: no usable cards (cards={len(cards)}, covers_ok={covers_ok}); keep existing pages.")
+    MIN_OK = 6  # 至少 6 篇抓到封面才允许覆盖, 否则保留旧页面(防残缺页覆盖好页)
+    if covers_ok < MIN_OK:
+        print(f"ABORT: only {covers_ok}/{len(data)} covers OK (<{MIN_OK}); keep existing pages unchanged.")
         return
     listbody = f'<div class="bar"><div class="inner"><div><h1>Magnum · 街拍</h1><p>Street Photography · 更新于 {upd}</p></div></div></div><div class="wrap">{"".join(cards)}</div><div class="foot">每日自动更新 · 数据来自 magnumphotos.com · 仅供个人浏览<br>更新于 {upd}</div>'
     open(os.path.join(OUTDIR, "index.html"), "w", encoding="utf-8").write(pg("Magnum 街拍", LIST_CSS, listbody))
